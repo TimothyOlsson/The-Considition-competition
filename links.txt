@@ -1,0 +1,5 @@
+Already working model (note: also has test data)
+https://dronemapper.com/sample_data/
+
+Lots of data sets for drones
+https://www.sensefly.com/education/datasets/?dataset=4944
