@@ -1,5 +1,18 @@
+The competition
+https://theconsidition.se/competition
+Label buildings, bodies of water and roads (perhaps other stuff as well could be useful)
+
 Already working model (note: also has test data)
 https://dronemapper.com/sample_data/
 
 Lots of data sets for drones
 https://www.sensefly.com/education/datasets/?dataset=4944
+
+Labeled cars in aerial images
+https://gdo152.llnl.gov/cowc/
+
+Good test sets here
+https://lionbridge.ai/datasets/15-best-aerial-image-datasets-for-machine-learning/
+
+https://pysource.com/2018/03/01/find-and-draw-contours-opencv-3-4-with-python-3-tutorial-19/
+https://pysource.com/2019/02/15/detecting-colors-hsv-color-space-opencv-with-python/
