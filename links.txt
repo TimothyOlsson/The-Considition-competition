@@ -14,5 +14,11 @@ https://gdo152.llnl.gov/cowc/
 Good test sets here
 https://lionbridge.ai/datasets/15-best-aerial-image-datasets-for-machine-learning/
 
+Tutorials
 https://pysource.com/2018/03/01/find-and-draw-contours-opencv-3-4-with-python-3-tutorial-19/
 https://pysource.com/2019/02/15/detecting-colors-hsv-color-space-opencv-with-python/
+https://realpython.com/python-opencv-color-spaces/
+
+
+Libraries
+https://scikit-image.org/docs/stable/auto_examples/index.html#examples-gallery
