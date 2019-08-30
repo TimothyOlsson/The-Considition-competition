@@ -22,3 +22,6 @@ https://realpython.com/python-opencv-color-spaces/
 
 Libraries
 https://scikit-image.org/docs/stable/auto_examples/index.html#examples-gallery
+
+Articles
+Object Recognition in Aerial Images Using CNN: https://www.mdpi.com/2313-433X/3/2/21/htm
