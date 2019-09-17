@@ -2,7 +2,8 @@
 learning_rate = 0.001
 batch_size = 100
 train_iterations = 100
-multi_gpu = False
+multi_gpu = True
+use_gpu = True
 
 import logging
 encoding = "utf-8-sig"  # or utf-8
@@ -25,6 +26,8 @@ session = tf.Session(config=config)
 # Sets keras backend to tensorflow
 import os
 os.environ['KERAS_BACKEND'] = 'tensorflow'
+if not use_gpu:
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import cv2
 import numpy as np
 import glob
@@ -72,8 +75,6 @@ def preprocess_data(all_groups):
         training_data.extend([img, mask, percent])
         all_training_data.append(training_data)
         print(f'{idx} done out of {len(all_groups)}', end='\r')
-        if idx == 10:
-            break
     return all_training_data
 
 def normalize_mask(mask_file):
@@ -114,14 +115,17 @@ def simplify_mask(mask_file):
                     quit()
 
 def fit_model(model, all_training_data):
+    X = [all_training_data[i][0] for i in range(len(all_training_data))]
+    Y = [all_training_data[i][1] for i in range(len(all_training_data))]
+    X = np.array(X)
+    Y = np.array(Y)
+    print(X.shape, Y.shape)
     for i in range(train_iterations):
-        for train_data in all_training_data:
-            X = np.array(train_data[0])
-            Y = np.array(train_data[1])
-            X = np.expand_dims(X, axis=0)
-            Y = np.expand_dims(Y, axis=0)
-            history = model.fit(X, Y,
-                                epochs=2)
+        history = model.fit(X, Y,
+                            batch_size=2,
+                            epochs=2,
+                            verbose=2,
+                            shuffle=True)
 
 def create_model():
     logger.info('Creating model')
