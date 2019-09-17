@@ -42,18 +42,36 @@ def preprocess_data(all_groups):
         img, mask, percent = group
         img = cv2.imread(img)  # Preprocess image as well and simplify?
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        simple_mask = simplyfy_mask(mask)
+        mask = cv2.imread(img) 
+        mask = cv2.cvtColor(mask, cv2.COLOR_BGR2RGB)
         print(f'{idx} done out of {len(all_groups)}', end='\r')
 
-def simplyfy_mask(mask):
+def simplify_mask(mask_file):
     """Simplify mask from RGB to int array
     0, 0, 0 = Empty = Nothing = 0
     255, 255, 0 = Yellow = building = 1
     255, 0, 255 = Purple = road = 2
     255, 0, 0 = Red = water = 3
     """
-    mask = cv2.imread(mask)
+    mask = cv2.imread(mask_file)
     mask = cv2.cvtColor(mask, cv2.COLOR_BGR2RGB)
+    mask_array = np.zeros((mask.shape[0], mask.shape[1]))
+    for x in range(mask.shape[0]):  # Width
+        for y in range(mask.shape[1]):  # Height
+            rgb = list(mask[x,y,:])
+            if any(value > 0 for value in rgb):
+                if rgb == [255, 255, 0]:  # Building
+                    mask_array[x,y] = 1
+                elif rgb == [255, 0, 255]:  # Road
+                    mask_array[x,y] = 2
+                elif rgb == [255, 0, 0]:  # Road
+                    mask_array[x,y] = 3
+                else:
+                    print("ERROR")
+                    print(mask_file)
+                    print(rgb, x, y)
+                    quit()
+
 
 def fit_data(training_data):
     pass
