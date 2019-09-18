@@ -1,6 +1,6 @@
 # PARAMETERS
 learning_rate = 0.001
-batch_size = 2
+batch_size = 10
 epochs = 2
 train_iterations = 100
 use_gpu = True
@@ -47,6 +47,8 @@ import pdb
 import time
 import matplotlib
 import re
+import multiprocessing
+import itertools
 
 # Needed to change plot position while calculating. NEEDS TO ADDED BEFORE pyplot import
 matplotlib.use('TkAgg')
@@ -60,11 +62,25 @@ def main():
     model = compile_model(model)
     all_groups = group_images()
     random.shuffle(all_groups)  # Shuffle data set
-    all_training_data = preprocess_data(all_groups)
+    pool = multiprocessing.Pool(multiprocessing.cpu_count())
+
+    # NOTE: bad way of doing it. Spikes at 32 Gb or RAM. Perhaps a generator would be better?
+    all_training_data = pool.map(preprocess_data,
+                                 list_chunk(all_groups,
+                                            multiprocessing.cpu_count()))
+    all_training_data = list(itertools.chain(*all_training_data))
     fit_model(model, all_training_data)
 
+def list_chunk(l, n_chunks):
+    avg = len(l) / float(n_chunks)
+    out = []
+    last = 0.0
+    while last < len(l):
+        out.append(l[int(last):int(last + avg)])
+        last += avg
+    return out
+
 def preprocess_data(all_groups):
-    logger.info('Preprocessing data')
     all_training_data = []
     for idx, group in enumerate(all_groups):
         training_data = []
@@ -77,9 +93,6 @@ def preprocess_data(all_groups):
         mask_array = normalize_mask(mask)
         training_data.extend([img_array, mask_array, percent])
         all_training_data.append(training_data)
-        if idx > 40:
-            break
-        print(f'{idx} done out of {len(all_groups)}', end='\r')
     return all_training_data
 
 def normalize_mask(mask_file):
@@ -119,15 +132,40 @@ def fit_model(model, all_training_data):
             plt.subplot(1,2,2)
             plt.title('Predicted mask')
             plt.imshow(predicted_mask)
-            plt.show()
+            if not os.path.isdir('images'):
+                os.mkdir('images')
+            plt.savefig(f'images/{iteration}.png')
         except KeyboardInterrupt:
             model.save('current_weights.h5', overwrite=True)
+            quit()
 
 def predict_to_mask(mask):
-    mask[mask > 0.8] = 255
+    mask[mask > 0.95] = 255
     return mask
 
 def create_model():
+    logger.info('Creating model')
+    model = Sequential()
+    model.add(Convolution2D(32, 2, 2, input_shape=(1024, 1024, 3), activation='relu'))
+    model.add(Convolution2D(8, 3, 3, activation='sigmoid'))
+    model.add(Convolution2D(8, 5, 5, activation='relu'))
+    model.add(AveragePooling2D(3,3))
+    model.add(Convolution2D(8, 7, 7, activation='sigmoid'))
+    model.add(Convolution2D(8, 7, 7, activation='sigmoid'))
+    model.add(Convolution2D(16, 5, 5, activation='relu'))
+    model.add(UpSampling2D(2))
+    for i in range(33):
+        model.add(Convolution2D(4, 5, 5, activation='relu'))
+    model.add(Convolution2D(4, 3, 3, activation='relu'))
+    model.add(AveragePooling2D(2,2))
+    model.add(UpSampling2D(4))
+    model.add(Dense(3, activation='sigmoid'))  # Softmax since classification
+    #model.add(Reshape((1024, 1024, 3)))
+    logger.info(model.summary(print_fn=log_func))
+    logger.info("Input shape: " + str(model.input_shape))
+    logger.info("Output shape: " + str(model.output_shape))
+    return model
+    """
     logger.info('Creating model')
     model = Sequential()
     model.add(Convolution2D(128, 20, 20, input_shape=(1024, 1024, 3), activation='relu'))
@@ -146,6 +184,7 @@ def create_model():
     logger.info("Input shape: " + str(model.input_shape))
     logger.info("Output shape: " + str(model.output_shape))
     return model
+    """
 
 def compile_model(model):
     logger.info('Compiling model')
