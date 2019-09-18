@@ -1,6 +1,7 @@
 # PARAMETERS
 learning_rate = 0.001
-batch_size = 100
+batch_size = 10
+epochs = 2
 train_iterations = 100
 multi_gpu = True
 use_gpu = True
@@ -70,9 +71,13 @@ def preprocess_data(all_groups):
     for idx, group in enumerate(all_groups):
         training_data = []
         img, mask, percent = group
-        img = img_to_array(img)
-        mask = normalize_mask(mask)
-        training_data.extend([img, mask, percent])
+        img_array = img_to_array(img)
+        if img_array.shape != (1024, 1024, 3):
+            # Note: Perhaps we could make it so that the CNN takes any size, but the output size would be all over the place
+            logger.warning(f'Image {img} has shape {img_array.shape}, not shape (1024, 1024, 3). Skipping')
+            continue
+        mask_array = normalize_mask(mask)
+        training_data.extend([img_array, mask_array, percent])
         all_training_data.append(training_data)
         print(f'{idx} done out of {len(all_groups)}', end='\r')
     return all_training_data
@@ -122,21 +127,20 @@ def fit_model(model, all_training_data):
     print(X.shape, Y.shape)
     for i in range(train_iterations):
         history = model.fit(X, Y,
-                            batch_size=2,
-                            epochs=2,
-                            verbose=2,
+                            epochs=epochs, batch_size=batch_size,
+                            validation_split=0.1, callbacks=[],
                             shuffle=True)
 
 def create_model():
     logger.info('Creating model')
     model = Sequential()
     model.add(Convolution2D(128, 20, 20, input_shape=(1024, 1024, 3), activation='relu'))
-    model.add(Convolution2D(128, 15, 15, activation='sigmoid'))
-    model.add(Convolution2D(128, 10, 10, activation='sigmoid'))
-    model.add(Convolution2D(128, 5, 5, activation='sigmoid'))
+    model.add(Convolution2D(6, 15, 15, activation='sigmoid'))
+    model.add(Convolution2D(6, 5, 5, activation='sigmoid'))
     model.add(AveragePooling2D(3,3))
-    model.add(Convolution2D(128, 32, 32, activation='sigmoid'))
-    model.add(Convolution2D(128, 40, 40, activation='sigmoid'))
+    model.add(Convolution2D(3, 32, 32, activation='sigmoid'))
+    model.add(Convolution2D(3, 40, 40, activation='sigmoid'))
+    model.add(Convolution2D(20, 4, 4, activation='sigmoid'))
     model.add(UpSampling2D(2))
     model.add(AveragePooling2D(2,2))
     model.add(UpSampling2D(4))
