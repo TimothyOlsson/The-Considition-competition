@@ -1,9 +1,8 @@
 # PARAMETERS
 learning_rate = 0.001
-batch_size = 10
+batch_size = 2
 epochs = 2
 train_iterations = 100
-multi_gpu = True
 use_gpu = True
 
 import logging
@@ -41,7 +40,6 @@ from keras.layers import Dense, Dropout, Flatten, Embedding, Activation, BatchNo
 from keras.layers import Convolution1D, Convolution2D, MaxPooling2D, AveragePooling2D, LSTM
 from keras.layers import GlobalAveragePooling2D, UpSampling2D, TimeDistributed, Reshape
 from keras.callbacks import ModelCheckpoint, TensorBoard
-from keras.utils.training_utils import multi_gpu_model
 from tensorflow.python.client import device_lib
 from keras.utils import np_utils
 from keras.optimizers import SGD, Adam, RMSprop
@@ -79,6 +77,8 @@ def preprocess_data(all_groups):
         mask_array = normalize_mask(mask)
         training_data.extend([img_array, mask_array, percent])
         all_training_data.append(training_data)
+        if idx > 40:
+            break
         print(f'{idx} done out of {len(all_groups)}', end='\r')
     return all_training_data
 
@@ -93,43 +93,39 @@ def img_to_array(img_file):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
 
-def simplify_mask(mask_file):
-    """Simplify mask from RGB to int array
-    0, 0, 0 = Empty = Nothing = 0
-    255, 255, 0 = Yellow = building = 1
-    255, 0, 255 = Purple = road = 2
-    255, 0, 0 = Red = water = 3
-    """
-    mask = cv2.imread(mask_file)
-    mask = cv2.cvtColor(mask, cv2.COLOR_BGR2RGB)
-    mask_array = np.zeros((mask.shape[0], mask.shape[1]))
-    for x in range(mask.shape[0]):  # Width
-        for y in range(mask.shape[1]):  # Height
-            rgb = list(mask[x,y,:])
-            if any(value > 0 for value in rgb):
-                if rgb == [255, 255, 0]:  # Building
-                    mask_array[x,y] = 1
-                elif rgb == [255, 0, 255]:  # Road
-                    mask_array[x,y] = 2
-                elif rgb == [255, 0, 0]:  # Road
-                    mask_array[x,y] = 3
-                else:
-                    print("ERROR")
-                    print(mask_file)
-                    print(rgb, x, y)
-                    quit()
-
 def fit_model(model, all_training_data):
+    logger.info('Creating a numpy array')
     X = [all_training_data[i][0] for i in range(len(all_training_data))]
     Y = [all_training_data[i][1] for i in range(len(all_training_data))]
     X = np.array(X)
     Y = np.array(Y)
     print(X.shape, Y.shape)
-    for i in range(train_iterations):
-        history = model.fit(X, Y,
-                            epochs=epochs, batch_size=batch_size,
-                            validation_split=0.1, callbacks=[],
-                            shuffle=True)
+    for iteration in range(train_iterations):
+        logger.info('-' * 10 + f'Iteration {iteration+1} out of {train_iterations}' + '-' * 10 )
+        try:
+            history = model.fit(X, Y,
+                                epochs=epochs, batch_size=batch_size,
+                                validation_split=0.1, callbacks=[],
+                                shuffle=True, verbose=1)
+
+            logger.info('Loss: ' + str(round(history.history['loss'][-1], 4)) + ' Val Loss: '
+                        + str(round(history.history['val_loss'][-1], 4)))
+            prediction = model.predict(np.expand_dims(X[0], axis=0))
+            predicted_mask = predict_to_mask(prediction)
+            predicted_mask = np.squeeze(predicted_mask, axis=0)
+            plt.subplot(1,2,1)
+            plt.title('Real mask')
+            plt.imshow(predict_to_mask(Y[0]))
+            plt.subplot(1,2,2)
+            plt.title('Predicted mask')
+            plt.imshow(predicted_mask)
+            plt.show()
+        except KeyboardInterrupt:
+            model.save('current_weights.h5', overwrite=True)
+
+def predict_to_mask(mask):
+    mask[mask > 0.8] = 255
+    return mask
 
 def create_model():
     logger.info('Creating model')
@@ -153,18 +149,10 @@ def create_model():
 
 def compile_model(model):
     logger.info('Compiling model')
-    devices = device_lib.list_local_devices()
-    gpu_count = 0
-    for device in devices:
-        if device.device_type == "GPU":
-            gpu_count += 1
-    logger.info(f"Found {gpu_count} usable gpus")
-    if multi_gpu:
-        model = multi_gpu_model(model, gpus=gpu_count)
     adam = Adam(lr=learning_rate) # lr 0.001 --> default adam
     sgd = SGD(lr=learning_rate, momentum=0.9, nesterov=True) # lr 0.001 --> default adam
     rmsprop = RMSprop(lr=learning_rate)
-    model.compile(loss='mse', optimizer=adam, metrics = ['accuracy'])
+    model.compile(loss='mse', optimizer=adam, metrics = ['binary_accuracy'])
     return model
 
 def group_images():
