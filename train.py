@@ -63,11 +63,11 @@ def main():
     all_groups = group_images()
     random.shuffle(all_groups)  # Shuffle data set
     pool = multiprocessing.Pool(multiprocessing.cpu_count())
-
     # NOTE: bad way of doing it. Spikes at 32 Gb or RAM. Perhaps a generator would be better?
     all_training_data = pool.map(preprocess_data,
                                  list_chunk(all_groups,
                                             multiprocessing.cpu_count()))
+    pool.close()
     all_training_data = list(itertools.chain(*all_training_data))
     fit_model(model, all_training_data)
 
@@ -146,21 +146,20 @@ def predict_to_mask(mask):
 def create_model():
     logger.info('Creating model')
     model = Sequential()
-    model.add(Convolution2D(32, 2, 2, input_shape=(1024, 1024, 3), activation='relu'))
+    model.add(Convolution2D(32, 2, 2, input_shape=(1024, 1024, 3), activation='sigmoid'))
     model.add(Convolution2D(8, 3, 3, activation='sigmoid'))
-    model.add(Convolution2D(8, 5, 5, activation='relu'))
+    model.add(Convolution2D(8, 5, 5, activation='sigmoid'))
     model.add(AveragePooling2D(3,3))
     model.add(Convolution2D(8, 7, 7, activation='sigmoid'))
     model.add(Convolution2D(8, 7, 7, activation='sigmoid'))
-    model.add(Convolution2D(16, 5, 5, activation='relu'))
+    model.add(Convolution2D(16, 5, 5, activation='sigmoid'))
     model.add(UpSampling2D(2))
     for i in range(33):
-        model.add(Convolution2D(4, 5, 5, activation='relu'))
+        model.add(Convolution2D(4, 5, 5, activation='sigmoid'))
     model.add(Convolution2D(4, 3, 3, activation='relu'))
     model.add(AveragePooling2D(2,2))
     model.add(UpSampling2D(4))
-    model.add(Dense(3, activation='sigmoid'))  # Softmax since classification
-    #model.add(Reshape((1024, 1024, 3)))
+    model.add(Dense(3, activation='sigmoid'))
     logger.info(model.summary(print_fn=log_func))
     logger.info("Input shape: " + str(model.input_shape))
     logger.info("Output shape: " + str(model.output_shape))
