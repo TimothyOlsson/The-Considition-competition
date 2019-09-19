@@ -135,12 +135,13 @@ def fit_model(model, all_training_data):
             if not os.path.isdir('images'):
                 os.mkdir('images')
             plt.savefig(f'images/{iteration}.png')
+            plt.close()
         except KeyboardInterrupt:
             model.save('current_weights.h5', overwrite=True)
             quit()
 
 def predict_to_mask(mask):
-    mask[mask > 0.95] = 255
+    mask = mask*255
     return mask
 
 def create_model():
