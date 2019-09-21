@@ -72,6 +72,7 @@ class CocoConfig(Config):
     """Configuration for training on MS COCO.
     Derives from the base Config class and overrides values specific
     to the COCO dataset.
+    NOTE Many additional parameters can be changed.
     """
     # Give the configuration a recognizable name
     NAME = "coco"
@@ -85,6 +86,25 @@ class CocoConfig(Config):
 
     # Number of classes (including background)
     NUM_CLASSES = 1 + 3  # COCO has 80 classes
+
+    # Use small images for faster training. Set the limits of the small side
+    # the large side, and that determines the image shape.
+    IMAGE_MIN_DIM = 1024
+    IMAGE_MAX_DIM = 1024
+    
+    # Use smaller anchors because our image and objects are small
+    # NOTE Different anchor sizes are suitable for houses/water/roads.
+    RPN_ANCHOR_SCALES = (64, 128, 256, 512, 1024)  # anchor side in pixels
+    
+    # Reduce training ROIs per image because the images are small and have
+    # few objects. Aim to allow ROI sampling to pick 33% positive ROIs.
+    TRAIN_ROIS_PER_IMAGE = 200
+
+    # Aim to allow ROI sampling to pick 33% positive ROIs.
+    TRAIN_ROIS_PER_IMAGE = 32
+
+    STEPS_PER_EPOCH = 500
+    VALIDATION_STEPS = 25
 
 
 ############################################################
@@ -438,8 +458,7 @@ if __name__ == '__main__':
     elif args.command == "evaluate":
         # Validation dataset
         dataset_val = CocoDataset()
-        val_type = "val" if args.year in '2017' else "minival"
-        coco = dataset_val.load_coco(args.dataset, val_type, year=args.year, return_coco=True, auto_download=args.download)
+        coco = dataset_val.load_coco(args.dataset, return_coco=True)
         dataset_val.prepare()
         print("Running COCO evaluation on {} images.".format(args.limit))
         evaluate_coco(model, dataset_val, coco, "bbox", limit=int(args.limit))
