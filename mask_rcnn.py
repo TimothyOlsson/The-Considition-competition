@@ -95,13 +95,9 @@ class CocoConfig(Config):
     # Use smaller anchors because our image and objects are small
     # NOTE Different anchor sizes are suitable for houses/water/roads.
     RPN_ANCHOR_SCALES = (64, 128, 256, 512, 1024)  # anchor side in pixels
-    
-    # Reduce training ROIs per image because the images are small and have
-    # few objects. Aim to allow ROI sampling to pick 33% positive ROIs.
-    TRAIN_ROIS_PER_IMAGE = 200
 
     # Aim to allow ROI sampling to pick 33% positive ROIs.
-    TRAIN_ROIS_PER_IMAGE = 32
+    TRAIN_ROIS_PER_IMAGE = 100
 
     STEPS_PER_EPOCH = 500
     VALIDATION_STEPS = 25
