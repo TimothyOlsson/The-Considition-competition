@@ -47,6 +47,11 @@ import zipfile
 import urllib.request
 import shutil
 
+import tensorflow as tf
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True  # Stops tf allocating all memory
+session = tf.Session(config=config)
+
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../")
 
@@ -91,7 +96,7 @@ class CocoConfig(Config):
     # the large side, and that determines the image shape.
     IMAGE_MIN_DIM = 1024
     IMAGE_MAX_DIM = 1024
-    
+
     # Use smaller anchors because our image and objects are small
     # NOTE Different anchor sizes are suitable for houses/water/roads.
     RPN_ANCHOR_SCALES = (64, 128, 256, 512, 1024)  # anchor side in pixels
@@ -130,7 +135,7 @@ class CocoDataset(utils.Dataset):
                 image_ids.extend(list(coco.getImgIds(catIds=[id])))
             # Remove duplicates
             image_ids = list(set(image_ids))
-        
+
         else:
             # All images
             image_ids = list(coco.imgs.keys())
@@ -147,11 +152,11 @@ class CocoDataset(utils.Dataset):
                 width=coco.imgs[i]["width"],
                 height=coco.imgs[i]["height"],
                 annotations=coco.loadAnns(coco.getAnnIds(imgIds=[i], catIds=class_ids, iscrowd=None)))
-        
+
         if return_coco:
             return coco
 
-  
+
     def load_mask(self, image_id):
         """Load instance masks for the given image.
 
@@ -387,6 +392,7 @@ if __name__ == '__main__':
     else:
         model = modellib.MaskRCNN(mode="inference", config=config,
                                   model_dir=args.logs)
+    model.keras_model.metrics_tensors = []
 
     # Select weights file to load
     if args.model.lower() == "coco":
