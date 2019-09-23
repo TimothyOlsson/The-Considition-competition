@@ -93,7 +93,7 @@ class Config(mrcnn_config):
     NUM_CLASSES = len(CLASS_NAMES)  # Needs to include bg
     IMAGE_MIN_DIM = 1024
     IMAGE_MAX_DIM = 1024
-    STEPS_PER_EPOCH = 2000
+    STEPS_PER_EPOCH = 500
     IMAGES_PER_GPU = 1
     # Use smaller anchors because our image and objects are small
     # NOTE Different anchor sizes are suitable for houses/water/roads.
@@ -160,8 +160,8 @@ def main():
     logger.info(f'Training: {len(list(train_data.keys()))} images, Validation: {len(list(val_data.keys()))} images')
     dataset_train = prepare_dataset(train_data)
     dataset_val = prepare_dataset(val_data)
-    model, predict_model = create_model()
-    fit_model(model, predict_model, dataset_train, dataset_train)
+    model, predict_model, config = create_model()
+    fit_model(model, predict_model, config, dataset_train, dataset_train)
 
 def prepare_dataset(data_dict):
     dataset = DroneDataset()
@@ -188,7 +188,7 @@ def create_model():
     predict_model = modellib.MaskRCNN(mode="inference", config=config,  # Will be used to predict
                                       model_dir=os.getcwd())
     predict_model.keras_model.metrics_tensors = []
-    return model, predict_model
+    return model, predict_model, config
 
 def list_chunk(l, n_chunks):
     avg = len(l) / float(n_chunks)
@@ -273,16 +273,19 @@ def img_to_array(img_file):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
 
-def fit_model(model, predict_model, dataset_train, dataset_val):
+def fit_model(model, predict_model, config, dataset_train, dataset_val):
     augmentation = imgaug.augmenters.Fliplr(0.5)
     try:
+        # Training - Stage 1
         model.train(dataset_train, dataset_val,
                     epochs=40,
-                    learning_rate=learning_rate,
+                    learning_rate=config.LEARNING_RATE,
                     layers='heads',
-                    augmentation=augmentation)  # Or heads
+                    augmentation=augmentation)
+        # Training - Stage 2
+        # Finetune layers from ResNet stage 4 and up
         model.train(dataset_train, dataset_val,
-                    learning_rate=learning_rate,
+                    learning_rate=config.LEARNING_RATE,
                     epochs=120,
                     layers='4+',
                     augmentation=augmentation)
@@ -290,7 +293,7 @@ def fit_model(model, predict_model, dataset_train, dataset_val):
         # Fine tune all layers
         print("Fine tune all layers")
         model.train(dataset_train, dataset_val,
-                    learning_rate=learning_rate / 10,
+                    learning_rate=config.LEARNING_RATE / 10,
                     epochs=160,
                     layers='all',
                     augmentation=augmentation)
