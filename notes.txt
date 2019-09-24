@@ -8,3 +8,9 @@ Training_dataset/Images/moz2_06_25.jpg (1024, 1014, 3)
 Training_dataset/Images/coxs_1_12_08.jpg (1024, 631, 3)
 Training_dataset/Images/Phillippines_1_04_18.jpg (1024, 887, 3)
 Training_dataset/Images/moz2_23_15.jpg (1014, 1024, 3)
+
+
+
+Example bad segment:
+{'height': 1024, 'id': 6210, 'iscrowd': 0, 'width': 1024, 'bbox': [128, 686, 4, 4],
+ 'category_id': 3, 'area': 0.0, 'image_id': 524, 'segmentation': [[131, 686, 128, 689]]}
