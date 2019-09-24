@@ -43,6 +43,10 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from pycocotools import mask as maskUtils
 
+from mrcnn import visualize
+from mrcnn.config import Config as mrcnn_config
+from mrcnn.visualize import display_images
+
 import zipfile
 import urllib.request
 import shutil
@@ -51,6 +55,7 @@ import tensorflow as tf
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True  # Stops tf allocating all memory
 session = tf.Session(config=config)
+os.environ['KERAS_BACKEND'] = 'tensorflow'
 
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../")
@@ -135,7 +140,6 @@ class CocoDataset(utils.Dataset):
                 image_ids.extend(list(coco.getImgIds(catIds=[id])))
             # Remove duplicates
             image_ids = list(set(image_ids))
-
         else:
             # All images
             image_ids = list(coco.imgs.keys())
@@ -155,7 +159,6 @@ class CocoDataset(utils.Dataset):
 
         if return_coco:
             return coco
-
 
     def load_mask(self, image_id):
         """Load instance masks for the given image.
@@ -187,6 +190,8 @@ class CocoDataset(utils.Dataset):
                                    image_info["width"])
                 # Some objects are so small that they're less than 1 pixel area
                 # and end up rounded out. Skip those objects.
+                if m is None:
+                    continue
                 if m.max() < 1:
                     continue
                 # Is it a crowd? If so, use a negative class ID.
@@ -217,7 +222,6 @@ class CocoDataset(utils.Dataset):
         else:
             super(self.__class__).image_reference(self, image_id)
 
-
     # The following two functions are from pycocotools with a few changes.
 
     def annToRLE(self, ann, height, width):
@@ -229,6 +233,10 @@ class CocoDataset(utils.Dataset):
         if isinstance(segm, list):
             # polygon -- a single object might consist of multiple parts
             # we merge all parts into one mask rle code
+            try:
+                rles = maskUtils.frPyObjects(segm, height, width)
+            except TypeError:
+                return None
             rles = maskUtils.frPyObjects(segm, height, width)
             rle = maskUtils.merge(rles)
         elif isinstance(segm['counts'], list):
@@ -245,6 +253,8 @@ class CocoDataset(utils.Dataset):
         :return: binary mask (numpy 2D array)
         """
         rle = self.annToRLE(ann, height, width)
+        if rle is None:
+            return None
         m = maskUtils.decode(rle)
         return m
 
@@ -438,7 +448,6 @@ if __name__ == '__main__':
                     epochs=40,
                     layers='heads',
                     augmentation=augmentation)
-
         # Training - Stage 2
         # Finetune layers from ResNet stage 4 and up
         print("Fine tune Resnet stage 4 and up")
@@ -447,7 +456,6 @@ if __name__ == '__main__':
                     epochs=120,
                     layers='4+',
                     augmentation=augmentation)
-
         # Training - Stage 3
         # Fine tune all layers
         print("Fine tune all layers")
@@ -456,7 +464,6 @@ if __name__ == '__main__':
                     epochs=160,
                     layers='all',
                     augmentation=augmentation)
-
     elif args.command == "evaluate":
         # Validation dataset
         dataset_val = CocoDataset()
