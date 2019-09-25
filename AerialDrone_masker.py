@@ -5,7 +5,7 @@ epochs = 2
 train_iterations = 100
 use_gpu = True
 tensorflow_debug = False
-model_path = 'mask_rcnn_coco.h5'
+model_path = 'mask_rcnn_coco_0040.h5'
 annotations_path = 'Training_dataset/Annotations/master_train.json'
 images_path = 'Training_dataset/Images'
 
@@ -117,17 +117,16 @@ class Config(mrcnn_config):
 
 class DroneDataset(utils.Dataset):
     def load_data(self, train_data):
-        print(vars(self))
         class_ids = sorted(coco.getCatIds())
-        self.train_data = train_data
         for idx, key in enumerate(train_data.keys()):
             data_dict = train_data[key]
             self.add_image('shape',
                            path=data_dict['file_path'],
                            height=data_dict['height'],
                            width=data_dict['width'],
-                           image_id=data_dict['image_id'])
-            #a = coco.getAnnIds(imgIds=[key], catIds=class_ids, iscrowd=None)
+                           image_id=data_dict['image_id'],
+                           annotations=data_dict['segments'],  # list with dict and segments
+                           class_ids=data_dict['class_ids'])
 
     def define_classes(self, all_annotations):
         # It needs to be sorted in id order
@@ -138,11 +137,9 @@ class DroneDataset(utils.Dataset):
             ids.append(d['id'])
             categories.append(d['supercategory'])
             names.append(d['name'])
-        print(ids, names, categories)
         z = list(zip(ids,names,categories))
         z.sort()
         ids, names, categories = zip(*z)
-        print(ids, names, categories)
         for id, name, cat in zip(ids, names, categories):
             self.add_class(cat, id, name)
 
@@ -153,21 +150,23 @@ class DroneDataset(utils.Dataset):
             one mask per instance.
         class_ids: a 1D array of class IDs of the instance masks.
         """
-        class_ids = self.train_data[image_id]['categorical_vector']
+        # FFS. Image_id = 0 is image_id 1 etc etc...
+        try:
+            class_ids = self.image_info[image_id]['class_ids']
+        except Exception as e:
+            print(e)
+            raise("ERROR")
         if class_ids == []:  # If empty, return empty mask
             return super(DroneDataset, self).load_mask(image_id)
-
         class_ids = np.array(class_ids, dtype=np.int32)
-        mask, _ = draw_mask_with_segments(self.train_data[image_id]['segments'],
-                                          self.train_data[image_id]['height'],
-                                          self.train_data[image_id]['width'])
+        mask, _ = draw_mask_with_segments(self.image_info[image_id]['annotations'],
+                                          self.image_info[image_id]['height'],
+                                          self.image_info[image_id]['width'])
         return mask, class_ids
 
     def image_reference(self, image_id):  # Needed
         """Return the path of the image."""
-        #print("LOADING IMAGE", image_id, self.train_data[image_id]['file_path'])
         info = self.image_info[image_id]
-        print(info)
         return self.train_data[image_id]['file_path']
 
 def log_func(txt):
@@ -189,22 +188,20 @@ def main():
     logger.info(f'Training: {len(list(train_data.keys()))} images, Validation: {len(list(val_data.keys()))} images')
     dataset_train = prepare_dataset(train_data, all_annotations)
     dataset_val = prepare_dataset(val_data, all_annotations)
-    visualize_training_data(dataset_train, dataset_val)
+    #print(vars(dataset_train).keys())
+    #visualize_training_data(dataset_train, dataset_val)
     model, predict_model, config = create_model()
     fit_model(model, predict_model, config, dataset_train, dataset_train)
     #test_drone_images(predict_model, config, dataset_train, dataset_val)
 
 def visualize_training_data(dataset_train, dataset_val):
-    for idx, image_id in enumerate(dataset_train.train_data.keys()):
-        print("IMAGE ID", image_id)
+    for idx, image_id in enumerate(dataset_train._image_ids):
         image = dataset_train.load_image(image_id)
         mask, class_ids = dataset_train.load_mask(image_id)
-        print("CLASS IDS", class_ids)
-        print("CLASS NAMES", dataset_train.class_names)
         visualize.display_top_masks(image, mask, class_ids, dataset_train.class_names)
 
 def test_drone_images(predict_model, config, dataset_train, dataset_val):
-    for image_id in dataset_train.image_id_to_path.keys():
+    for image_id in dataset_train._image_ids:
         #image = dataset_train.load_image(image_id)
         image, image_meta, gt_class_id, gt_bbox, gt_mask =\
         modellib.load_image_gt(dataset_train, config, image_id, use_mini_mask=False)
@@ -322,11 +319,11 @@ def preprocess_data(all_annotations):
         mask, segments = draw_mask_with_segments(segments,
                                                  data_dict['height'],
                                                  data_dict['width'])
-        categorical_vector = []
+        class_ids = []
         for d_segment in segments:
-            categorical_vector.append(d_segment['category_id'])
+            class_ids.append(d_segment['category_id'])
         data_dict['segments'] = segments   # Load dynamically, else requires loads of memory
-        data_dict['categorical_vector'] = categorical_vector
+        data_dict['class_ids'] = class_ids
         all_preprocessed_data[d_img['id']] = data_dict
         progress.update(1)
     progress.close()
@@ -390,12 +387,14 @@ def annToMask(ann, height, width):
 def fit_model(model, predict_model, config, dataset_train, dataset_val):
     augmentation = imgaug.augmenters.Fliplr(0.5)
     try:
+        """
         # Training - Stage 1
         model.train(dataset_train, dataset_val,
                     epochs=40,
                     learning_rate=config.LEARNING_RATE,
                     layers='heads',
                     augmentation=augmentation)
+        """
         # Training - Stage 2
         # Finetune layers from ResNet stage 4 and up
         model.train(dataset_train, dataset_val,
