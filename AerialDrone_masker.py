@@ -8,6 +8,8 @@ tensorflow_debug = False
 model_path = 'mask_rcnn_coco_0040.h5'
 annotations_path = 'Training_dataset/Annotations/master_train.json'
 images_path = 'Training_dataset/Images'
+preprocessed_path = 'Training_dataset/Preprocessed'
+
 
 import logging
 encoding = "utf-8-sig"  # or utf-8
@@ -101,13 +103,12 @@ coco = COCO(annotations_path)
 
 class Config(mrcnn_config):
     NAME = "aerial_drone_map"
-    GPU_COUNT = 1
+    GPU_COUNT = 2
     IMAGES_PER_GPU = 1  # batch size
     NUM_CLASSES = len(CLASS_NAMES)  # Needs to include bg
     IMAGE_MIN_DIM = 1024
     IMAGE_MAX_DIM = 1024
     STEPS_PER_EPOCH = 500
-    IMAGES_PER_GPU = 1
     # Use smaller anchors because our image and objects are small
     # NOTE Different anchor sizes are suitable for houses/water/roads.
     RPN_ANCHOR_SCALES = (64, 128, 256, 512, 1024)  # anchor side in pixels
@@ -126,7 +127,8 @@ class DroneDataset(utils.Dataset):
                            width=data_dict['width'],
                            image_id=data_dict['image_id'],
                            annotations=data_dict['segments'],  # list with dict and segments
-                           class_ids=data_dict['class_ids'])
+                           class_ids=data_dict['class_ids'],
+                           preprocessed_mask=data_dict['preprocessed_mask'])
 
     def define_classes(self, all_annotations):
         # It needs to be sorted in id order
@@ -157,11 +159,17 @@ class DroneDataset(utils.Dataset):
             print(e)
             raise("ERROR")
         if class_ids == []:  # If empty, return empty mask
+            print("CLASS IDS", class_ids)
+            print(self.image_info[image_id]['path'])
             return super(DroneDataset, self).load_mask(image_id)
+
         class_ids = np.array(class_ids, dtype=np.int32)
-        mask, _ = draw_mask_with_segments(self.image_info[image_id]['annotations'],
-                                          self.image_info[image_id]['height'],
-                                          self.image_info[image_id]['width'])
+        if os.path.isfile(self.image_info[image_id]['preprocessed_mask']):
+            mask = np.load(self.image_info[image_id]['preprocessed_mask'])
+        else:
+            mask, _ = draw_mask_with_segments(self.image_info[image_id]['annotations'],
+                                              self.image_info[image_id]['height'],
+                                              self.image_info[image_id]['width'])
         return mask, class_ids
 
     def image_reference(self, image_id):  # Needed
@@ -324,6 +332,15 @@ def preprocess_data(all_annotations):
             class_ids.append(d_segment['category_id'])
         data_dict['segments'] = segments   # Load dynamically, else requires loads of memory
         data_dict['class_ids'] = class_ids
+
+        preprocessed_file = preprocessed_path + '/' +\
+                            os.path.basename(d_img['file_name']).split('.')[0] +\
+                            '.npy'
+        if not os.path.isdir(preprocessed_path):
+            os.mkdir(preprocessed_path)
+        if not os.path.isfile(preprocessed_file):
+            np.save(preprocessed_file, mask)
+        data_dict['preprocessed_mask'] = preprocessed_file
         all_preprocessed_data[d_img['id']] = data_dict
         progress.update(1)
     progress.close()
@@ -387,14 +404,12 @@ def annToMask(ann, height, width):
 def fit_model(model, predict_model, config, dataset_train, dataset_val):
     augmentation = imgaug.augmenters.Fliplr(0.5)
     try:
-        """
         # Training - Stage 1
         model.train(dataset_train, dataset_val,
                     epochs=40,
                     learning_rate=config.LEARNING_RATE,
                     layers='heads',
                     augmentation=augmentation)
-        """
         # Training - Stage 2
         # Finetune layers from ResNet stage 4 and up
         model.train(dataset_train, dataset_val,
