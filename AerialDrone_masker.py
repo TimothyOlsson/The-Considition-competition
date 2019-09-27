@@ -112,8 +112,9 @@ class Config(mrcnn_config):
     # Use smaller anchors because our image and objects are small
     # NOTE Different anchor sizes are suitable for houses/water/roads.
     RPN_ANCHOR_SCALES = (64, 128, 256, 512, 1024)  # anchor side in pixels
+
     # Aim to allow ROI sampling to pick 33% positive ROIs.
-    TRAIN_ROIS_PER_IMAGE = 100
+    #TRAIN_ROIS_PER_IMAGE = 100
     VALIDATION_STEPS = 25
 
 class DroneDataset(utils.Dataset):
@@ -127,8 +128,9 @@ class DroneDataset(utils.Dataset):
                            width=data_dict['width'],
                            image_id=data_dict['image_id'],
                            annotations=data_dict['segments'],  # list with dict and segments
-                           class_ids=data_dict['class_ids'],
-                           preprocessed_mask=data_dict['preprocessed_mask'])
+                           class_ids=data_dict['class_ids'])
+                           #preprocessed_mask=data_dict['preprocessed_mask'])
+                           #image_array=data_dict['image_array'])
 
     def define_classes(self, all_annotations):
         # It needs to be sorted in id order
@@ -145,6 +147,12 @@ class DroneDataset(utils.Dataset):
         for id, name, cat in zip(ids, names, categories):
             self.add_class(cat, id, name)
 
+    """
+    def load_image(self, image_id):
+        image_array = self.image_info[image_id]['image_array']
+        return image_array
+    """
+
     def load_mask(self, image_id):
         """Generate instance masks for an image.
         Returns:
@@ -159,17 +167,15 @@ class DroneDataset(utils.Dataset):
             print(e)
             raise("ERROR")
         if class_ids == []:  # If empty, return empty mask
-            print("CLASS IDS", class_ids)
-            print(self.image_info[image_id]['path'])
+            #print("CLASS IDS", class_ids)
+            #print(self.image_info[image_id]['path'])
             return super(DroneDataset, self).load_mask(image_id)
 
         class_ids = np.array(class_ids, dtype=np.int32)
-        if os.path.isfile(self.image_info[image_id]['preprocessed_mask']):
-            mask = np.load(self.image_info[image_id]['preprocessed_mask'])
-        else:
-            mask, _ = draw_mask_with_segments(self.image_info[image_id]['annotations'],
-                                              self.image_info[image_id]['height'],
-                                              self.image_info[image_id]['width'])
+        #mask = self.image_info[image_id]['preprocessed_mask']
+        mask, _ = draw_mask_with_segments(self.image_info[image_id]['annotations'],
+                                          self.image_info[image_id]['height'],
+                                          self.image_info[image_id]['width'])
         return mask, class_ids
 
     def image_reference(self, image_id):  # Needed
@@ -309,10 +315,11 @@ def preprocess_data(all_annotations):
 
     all_preprocessed_data = {}
     n_categories = len(all_annotations['categories']) + 1
-    for d_img in all_annotations['images']:
+    for idx, d_img in enumerate(all_annotations['images']):
         data_dict = {}
         if 1024 != d_img['height'] or 1024 != d_img['width']:
             tqdm.tqdm.write(f"Skipping image {d_img['file_name']}")
+            progress.update(1)
             continue
         data_dict['file_name'] = d_img['file_name']
         data_dict['file_path'] = os.path.join(images_path, d_img['file_name'])
@@ -332,19 +339,18 @@ def preprocess_data(all_annotations):
             class_ids.append(d_segment['category_id'])
         data_dict['segments'] = segments   # Load dynamically, else requires loads of memory
         data_dict['class_ids'] = class_ids
-
-        preprocessed_file = preprocessed_path + '/' +\
-                            os.path.basename(d_img['file_name']).split('.')[0] +\
-                            '.npy'
-        if not os.path.isdir(preprocessed_path):
-            os.mkdir(preprocessed_path)
-        if not os.path.isfile(preprocessed_file):
-            np.save(preprocessed_file, mask)
-        data_dict['preprocessed_mask'] = preprocessed_file
+        #data_dict['preprocessed_mask'] = mask
+        #image_array = img_to_array(data_dict['file_path'])
+        #data_dict['image_array'] = image_array
         all_preprocessed_data[d_img['id']] = data_dict
         progress.update(1)
     progress.close()
     return all_preprocessed_data
+
+def img_to_array(img_file):
+    img = cv2.imread(img_file)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    return img
 
 def draw_mask_with_segments(segments, height, width):
     masks = []
